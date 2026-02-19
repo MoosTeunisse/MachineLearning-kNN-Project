@@ -4,7 +4,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 
 from .datasets import load_breast_cancer_df
-from .utils import set_seed, benchmark
+from .utils import set_seed, benchmark, peak_memory_bytes
 
 def run_sklearn_knn_benchmark(k: int = 5, test_size: float = 0.2, seed: int = 42):
     """Run kNN from sklearn as a benchmark."""
@@ -27,6 +27,7 @@ def run_sklearn_knn_benchmark(k: int = 5, test_size: float = 0.2, seed: int = 42
     accuracy = accuracy_score(y_test, y_pred)
     
     timing = benchmark(lambda: knn.predict(X_test_scaled))
+    peak_bytes = peak_memory_bytes(lambda: knn.predict(X_test_scaled))
     
     return {
         "k": k,
@@ -34,5 +35,7 @@ def run_sklearn_knn_benchmark(k: int = 5, test_size: float = 0.2, seed: int = 42
         "n_test": X_test.shape[0],
         "n_features": X_train.shape[1],
         "accuracy": float(accuracy),
-        **timing
+        "peak_memory_bytes": peak_bytes,
+        "peak_memory_mb": peak_bytes / (1024 * 1024),
+        **timing,
     }
