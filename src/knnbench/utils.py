@@ -1,37 +1,36 @@
-import time
 import numpy as np
 import random
-import tracemalloc
+from sklearn.metrics import accuracy_score, f1_score, recall_score
 
 def set_seed(seed: int = 42):
     """set the same seed everytime for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
 
-def peak_memory_bytes(fn):
-    """a function to show the peak memory usage of a function."""
-    tracemalloc.start()
-    fn()
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    return int(peak)
-
-def benchmark(fn, warmup: int = 3, repeat: int = 10):
-    """a function to benchmark the execution time of a function."""
-    for _ in range(warmup):
-        fn()
-        
-    times = []
-    for _ in range(repeat):
-        start_time = time.perf_counter()
-        fn()
-        end_time = time.perf_counter()
-        times.append(end_time - start_time)
-    
-    times = np.array(times)
-    
+def compute_metrics(y_true, y_pred):
+    """
+    Returns a dict of metrics.
+    """
     return {
-        "median_s": float(np.median(times)),
-        "mean_s": float(np.mean(times)),
-        "std_s": float(np.std(times)),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "recall": float(recall_score(y_true, y_pred, average="macro")),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
     }
+
+def tie_frequency(tie_mask):
+    """
+    tie_mask is a boolean (it's true if prediction required tie breaking)
+    """
+    tie_mask = np.asarray(tie_mask, dtype=bool)
+    return float(np.mean(tie_mask)) if tie_mask.size > 0 else 0.0
+
+def prediction_disagreement_rate(pred_a, pred_b):
+    """
+    Fraction of samples where predictions differ.
+    """
+    pred_a = np.asarray(pred_a)
+    pred_b = np.asarray(pred_b)
+    return float(np.mean(pred_a != pred_b))
+
+def euclidean_distance(x1, x2):
+    return np.sqrt(np.sum((x1 - x2) ** 2))
