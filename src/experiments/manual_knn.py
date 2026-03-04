@@ -4,9 +4,10 @@ class ManualKNNClassifier:
     """
     A manual (numpy only) implementation of KNN for classification.
     """
-    def __init__(self, k=5, voting="uniform"):
+    def __init__(self, k=5, voting="uniform", alpha=1.0):
         self.k = k
         self.voting = voting
+        self.alpha = alpha
     
     def fit(self, X, y):
         """
@@ -18,6 +19,10 @@ class ManualKNNClassifier:
         self.y_train = np.asarray(y)
 
         self.classes_, self.y_train_int = np.unique(self.y_train, return_inverse=True)
+        
+        counts = np.bincount(self.y_train_int, minlength=len(self.classes_))
+        self.class_prior_ = counts / counts.sum()
+        
         return self
     
     def predict(self, new_points, batch_size=256):
@@ -26,6 +31,7 @@ class ManualKNNClassifier:
         Changes made so far:
             - added batching
             - merged this with predict_class, which was needed for batching to work ya know (predict_class is commented below for reference)
+            - changed voting to make use of class priors, to account for the class imbalance in the dataset
         """
         X_test = np.asarray(new_points, dtype=float)
         X_train = self.X_train
@@ -52,19 +58,25 @@ class ManualKNNClassifier:
                 nearest_labels_int = self.y_train_int[nearest_indices]
                 
                 if self.voting == "uniform":
-                    most_occurring = np.bincount(nearest_labels_int, minlength=len(self.classes_))
-                    predictions_int.append(int(np.argmax(most_occurring)))
+                    # most_occurring = np.bincount(nearest_labels_int, minlength=len(self.classes_))
+                    # predictions_int.append(int(np.argmax(most_occurring)))
+                    votes = np.bincount(nearest_labels_int, minlength=len(self.classes_)).astype(float)
+                    alpha = self.alpha 
+                    scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
+                    predictions_int.append(int(np.argmax(scores)))
                 
                 elif self.voting == "distance":
                     nearest_dists = np.sqrt(dists[i, nearest_indices])
                     nearest_weights = 1.0 / (nearest_dists + 1e-9)
                     
-                    sums = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_))
-                    predictions_int.append(int(np.argmax(sums)))
+                    # sums = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_))
+                    # predictions_int.append(int(np.argmax(sums)))
+                    votes = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_)).astype(float)
+                    alpha = self.alpha 
+                    scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
+                    predictions_int.append(int(np.argmax(scores)))
         
         return self.classes_[np.asarray(predictions_int)]
-    
-    
     
     # def predict_class(self, new_point):
     #     """
