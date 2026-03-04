@@ -4,10 +4,11 @@ class ManualKNNClassifier:
     """
     A manual (numpy only) implementation of KNN for classification.
     """
-    def __init__(self, k=5, voting="uniform", alpha=1.0):
+    def __init__(self, k=5, voting="uniform", alpha=0.5, tie_break="nearest"):
         self.k = k
         self.voting = voting
         self.alpha = alpha
+        self.tie_break = tie_break
     
     def fit(self, X, y):
         """
@@ -41,6 +42,8 @@ class ManualKNNClassifier:
         
         train_sq = np.sum(X_train * X_train, axis=1)
         
+        num_ties = 0
+        
         for start in range(0, n_test, batch_size):
             end = min(start + batch_size, n_test)
             Xbatch = X_test[start:end]
@@ -57,27 +60,59 @@ class ManualKNNClassifier:
                 nearest_indices = indices_k[i]
                 nearest_labels_int = self.y_train_int[nearest_indices]
                 
+                nearest_dists_sq = dists[i, nearest_indices]
+                
                 if self.voting == "uniform":
-                    # most_occurring = np.bincount(nearest_labels_int, minlength=len(self.classes_))
-                    # predictions_int.append(int(np.argmax(most_occurring)))
+                    alpha = self.alpha
+                    
                     votes = np.bincount(nearest_labels_int, minlength=len(self.classes_)).astype(float)
-                    alpha = self.alpha 
                     scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
-                    predictions_int.append(int(np.argmax(scores)))
+                    max_score = np.max(scores)
+                    
+                    tied = np.where(scores == max_score)[0]
+                    if tied.size == 1:
+                        predictions_int.append(int(tied[0]))
+                    else:
+                        num_ties += 1
+                        pred = self._break_tie(nearest_labels_int, nearest_dists_sq, tied)
+                        predictions_int.append(pred)
                 
                 elif self.voting == "distance":
+                    alpha = self.alpha 
+                    
                     nearest_dists = np.sqrt(dists[i, nearest_indices])
                     nearest_weights = 1.0 / (nearest_dists + 1e-9)
-                    
-                    # sums = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_))
-                    # predictions_int.append(int(np.argmax(sums)))
+
                     votes = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_)).astype(float)
-                    alpha = self.alpha 
                     scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
-                    predictions_int.append(int(np.argmax(scores)))
+                    max_score = np.max(scores)
+                    
+                    tied = np.where(np.isclose(scores, max_score, rtol=1e-9, atol=1e-9))[0]
+                    if tied.size == 1:
+                        predictions_int.append(int(tied[0]))
+                    else:
+                        num_ties += 1
+                        pred = self._break_tie(nearest_labels_int, nearest_dists_sq, tied)
+                        predictions_int.append(pred)
+        print("ties encountered:", num_ties)
         
         return self.classes_[np.asarray(predictions_int)]
     
+    def _break_tie(self, nearest_labels_int, nearest_dists_sq, tied_classes):
+        """
+        Break ties between classes in tied_classes.
+        tie_break="nearest": pick the class of the closest neighbor among tied classes.
+        """
+        if self.tie_break == "nearest":
+            mask = np.isin(nearest_labels_int, tied_classes)
+            j = int(np.argmin(nearest_dists_sq[mask]))
+            return int(nearest_labels_int[mask][j])
+
+        elif self.tie_break == "min_class":
+            return int(np.min(tied_classes))
+    
+    
+    #----------------------------------------OLD---------------------------------------------
     # def predict_class(self, new_point):
     #     """
     #     Way to predict class of new point based on training data.
