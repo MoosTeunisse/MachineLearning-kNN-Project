@@ -4,11 +4,11 @@ class ManualKNNClassifier:
     """
     A manual (numpy only) implementation of KNN for classification.
     """
-    def __init__(self, k=5, voting="uniform", alpha=0.5, tie_break="nearest"):
+    def __init__(self, k=5, voting="uniform", tie_break="nearest", verbose =False):
         self.k = k
         self.voting = voting
-        self.alpha = alpha
         self.tie_break = tie_break
+        self.verbose = verbose
     
     def fit(self, X, y):
         """
@@ -20,10 +20,6 @@ class ManualKNNClassifier:
         self.y_train = np.asarray(y)
 
         self.classes_, self.y_train_int = np.unique(self.y_train, return_inverse=True)
-        
-        counts = np.bincount(self.y_train_int, minlength=len(self.classes_))
-        self.class_prior_ = counts / counts.sum()
-        
         return self
     
     def predict(self, new_points, batch_size=256):
@@ -32,7 +28,9 @@ class ManualKNNClassifier:
         Changes made so far:
             - added batching
             - merged this with predict_class, which was needed for batching to work ya know (predict_class is commented below for reference)
+            - added tie breaking, nearest and min_class (in case of ties in voting, pick the class of the closest neighbor among tied classes, or pick the class with the smallest integer label among tied classes)
             - changed voting to make use of class priors, to account for the class imbalance in the dataset
+            - removed the class prior shit, messed with the tie breaking, aka if used there were no more ties
         """
         X_test = np.asarray(new_points, dtype=float)
         X_train = self.X_train
@@ -63,13 +61,11 @@ class ManualKNNClassifier:
                 nearest_dists_sq = dists[i, nearest_indices]
                 
                 if self.voting == "uniform":
-                    alpha = self.alpha
-                    
                     votes = np.bincount(nearest_labels_int, minlength=len(self.classes_)).astype(float)
-                    scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
-                    max_score = np.max(scores)
                     
-                    tied = np.where(scores == max_score)[0]
+                    max_vote = np.max(votes)
+                    tied = np.where(votes == max_vote)[0]
+                    
                     if tied.size == 1:
                         predictions_int.append(int(tied[0]))
                     else:
@@ -78,23 +74,24 @@ class ManualKNNClassifier:
                         predictions_int.append(pred)
                 
                 elif self.voting == "distance":
-                    alpha = self.alpha 
-                    
-                    nearest_dists = np.sqrt(dists[i, nearest_indices])
+                    nearest_dists = np.sqrt(nearest_dists_sq)
                     nearest_weights = 1.0 / (nearest_dists + 1e-9)
 
                     votes = np.bincount(nearest_labels_int, weights=nearest_weights, minlength=len(self.classes_)).astype(float)
-                    scores = votes / ((self.class_prior_ + 1e-12) ** alpha)
-                    max_score = np.max(scores)
                     
-                    tied = np.where(np.isclose(scores, max_score, rtol=1e-9, atol=1e-9))[0]
+                    max_vote = np.max(votes)
+                    tied = np.where(np.isclose(votes, max_vote, rtol=1e-9, atol=1e-9))[0]
+                    
                     if tied.size == 1:
                         predictions_int.append(int(tied[0]))
                     else:
                         num_ties += 1
                         pred = self._break_tie(nearest_labels_int, nearest_dists_sq, tied)
                         predictions_int.append(pred)
-        print("ties encountered:", num_ties)
+        
+        self.last_num_ties_ = int(num_ties)
+        if self.verbose:
+            print("ties encounterd:", self.last_num_ties_)
         
         return self.classes_[np.asarray(predictions_int)]
     
@@ -102,6 +99,7 @@ class ManualKNNClassifier:
         """
         Break ties between classes in tied_classes.
         tie_break="nearest": pick the class of the closest neighbor among tied classes.
+        tie_break="min_class": pick the class with the smallest integer label among tied classes.
         """
         if self.tie_break == "nearest":
             mask = np.isin(nearest_labels_int, tied_classes)
