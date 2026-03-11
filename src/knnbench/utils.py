@@ -15,6 +15,7 @@ def compute_metrics(y_true, y_pred):
     
     metrics = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
+        "macro_precision": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
         "macro_recall": float(recall_score(y_true, y_pred, average="macro")),
         "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
     }
