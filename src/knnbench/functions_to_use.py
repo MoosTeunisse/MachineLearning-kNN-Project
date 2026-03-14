@@ -1,7 +1,7 @@
 from itertools import product
 from typing import Any
-
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
@@ -344,4 +344,54 @@ def run_sklearn_best_on_test_adult(
         "macro_precision": float(metrics["macro_precision"]),
         "macro_recall": float(metrics["macro_recall"]),
         "macro_f1": float(metrics["macro_f1"]),
+    }
+
+def run_majority_baseline_adult(
+    *,
+    seed: int = 42,
+    val_size: float = 0.25,
+) -> dict[str, Any]:
+    """
+    Majority-class baseline: always predict the most common class, useful to see how much better our manual kNN implementations are than a trivial baseline.
+    Uses the same train/val/test split as the other functions.
+    """
+    set_seed(seed)
+
+    X, y = load_adult_df()
+    if "fnlwgt" in X.columns:
+        X = X.drop(columns=["fnlwgt"])
+
+    X_train_full, X_test, y_train_full, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=seed, stratify=y
+    )
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_train_full, y_train_full, test_size=val_size, random_state=seed, stratify=y_train_full
+    )
+
+    # Majority class from training set
+    majority_class = y_train.value_counts().idxmax()
+
+    # Predict majority class for every validation sample
+    y_pred_val = pd.Series([majority_class] * len(y_val), index=y_val.index)
+    val_metrics = compute_metrics(y_val, y_pred_val)
+
+    # Predict majority class for every test sample
+    y_pred_test = pd.Series([majority_class] * len(y_test), index=y_test.index)
+    test_metrics = compute_metrics(y_test, y_pred_test)
+
+    return {
+        "majority_class": majority_class,
+        "val": {
+            "accuracy": float(val_metrics["accuracy"]),
+            "macro_precision": float(val_metrics["macro_precision"]),
+            "macro_recall": float(val_metrics["macro_recall"]),
+            "macro_f1": float(val_metrics["macro_f1"]),
+        },
+        "test": {
+            "accuracy": float(test_metrics["accuracy"]),
+            "macro_precision": float(test_metrics["macro_precision"]),
+            "macro_recall": float(test_metrics["macro_recall"]),
+            "macro_f1": float(test_metrics["macro_f1"]),
+        },
     }
