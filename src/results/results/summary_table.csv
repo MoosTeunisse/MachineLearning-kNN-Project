@@ -1,0 +1,4 @@
+Model,Accuracy,Macro Precision,Macro Recall,Macro F1
+"Manual kNN (k=7, None, uniform, min_class)",0.8566 ± 0.0000,0.8087 ± 0.0000,0.7842 ± 0.0000,0.7951 ± 0.0000
+"sklearn kNN (k=7, None, uniform)",0.8574 ± 0.0000,0.8107 ± 0.0000,0.7833 ± 0.0000,0.7954 ± 0.0000
+Majority baseline,0.7607 ± 0.0000,0.3803 ± 0.0000,0.5000 ± 0.0000,0.4320 ± 0.0000
