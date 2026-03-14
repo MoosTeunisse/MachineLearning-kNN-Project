@@ -3,6 +3,8 @@ import numpy as np
 
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
 from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 from sklearn.datasets import fetch_openml
 from sklearn.datasets import load_breast_cancer
@@ -33,6 +35,7 @@ def load_adult_df(raw: bool = True):
     #designate target and features
     y = df[target_col].astype(str).str.strip()
     X = df.drop(columns=[target_col])
+    X = X.drop(columns=["fnlwgt", "education"], errors='ignore') #since we already have education-num, and fnlwgt is not a meaningful feature for prediction
     
     X = X.replace('?', np.nan)
     
@@ -50,21 +53,33 @@ def preprocess_adult_df(X, scaling=None, return_preprocessor=False):
     
     #choose scaling
     if scaling is None:
-        num_transformer = 'passthrough'
+        scaler = None
     elif scaling == "standard":
-        num_transformer = StandardScaler()
+        scaler = StandardScaler()
     elif scaling == "minmax":
-        num_transformer = MinMaxScaler()
+        scaler = MinMaxScaler()
     else:
         raise ValueError(f"Invalid scaling option: {scaling}, must be None, 'standard', or 'minmax'.")
     
-    #make preprocessor
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", num_transformer, num_cols),
-            ("cat", OneHotEncoder(handle_unknown='ignore', sparse_output=False), cat_cols)
-        ]
-    )
+    if scaler == "passthrough":
+        num_transformer = Pipeline([
+            ("imputer", SimpleImputer(strategy='median'))
+        ])
+    else:
+        num_transformer = Pipeline([
+            ("imputer", SimpleImputer(strategy='median')),
+            ("scaler", scaler)
+        ])
+    
+    cat_transformer = Pipeline([
+        ("imputer", SimpleImputer(strategy='most_frequent')),
+        ("onehot", OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+    ])
+    
+    preprocessor = ColumnTransformer([
+        ("num", num_transformer, num_cols),
+        ("cat", cat_transformer, cat_cols)
+    ])
     
     #fit and transform the data
     X_processed = preprocessor.fit_transform(X)
